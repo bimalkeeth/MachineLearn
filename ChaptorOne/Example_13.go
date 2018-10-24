@@ -1,42 +1,60 @@
 package main
 
 import (
-	"github.com/wcharczuk/go-chart"
+	"bufio"
+	"github.com/kniren/gota/dataframe"
 	"log"
-	"net/http"
+	"os"
 )
 
-func drawChart(res http.ResponseWriter, req *http.Request) {
-	graph := chart.Chart{
-		Series: []chart.Series{
-			chart.ContinuousSeries{
-				XValues: []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-				YValues: []float64{1.0, 2.0, 3.0, 4.0, 5.0},
-			},
-		},
-	}
-
-	res.Header().Set("Content-Type", "image/png")
-	graph.Render(chart.PNG, res)
-}
-
-func drawChartWide(res http.ResponseWriter, req *http.Request) {
-	graph := chart.Chart{
-		Width: 1920, //this overrides the default.
-		Series: []chart.Series{
-			chart.ContinuousSeries{
-				XValues: []float64{1.0, 2.0, 3.0, 4.0},
-				YValues: []float64{1.0, 2.0, 3.0, 4.0},
-			},
-		},
-	}
-
-	res.Header().Set("Content-Type", "image/png")
-	graph.Render(chart.PNG, res)
-}
-
 func main() {
-	http.HandleFunc("/", drawChart)
-	http.HandleFunc("/wide", drawChartWide)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	f, err := os.Open("./CData/diabetes.csv")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	// Create a dataframe from the CSV file.
+	// The types of the columns will be inferred.
+	diabetesDF := dataframe.ReadCSV(f)
+
+	// Calculate the number of elements in each set.
+	trainingNum := (4 * diabetesDF.Nrow()) / 5
+	testNum := diabetesDF.Nrow() / 5
+
+	if trainingNum+testNum < diabetesDF.Nrow() {
+		trainingNum++
+	}
+	// Create the subset indices.
+	trainingIdx := make([]int, trainingNum)
+	testIdx := make([]int, testNum)
+	// Enumerate the training indices.
+	for i := 0; i < trainingNum; i++ {
+		trainingIdx[i] = i
+	}
+	// Enumerate the test indices.
+	for i := 0; i < testNum; i++ {
+		testIdx[i] = trainingNum + i
+	}
+
+	// Create the subset dataframes.
+	trainingDF := diabetesDF.Subset(trainingIdx)
+	testDF := diabetesDF.Subset(testIdx)
+
+	setMap := map[int]dataframe.DataFrame{
+		0: trainingDF,
+		1: testDF,
+	}
+	for idx, setName := range []string{"training.csv", "test.csv"} {
+		f, err := os.Create(setName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// Create a buffered writer.
+		w := bufio.NewWriter(f)
+		// Write the dataframe out as a CSV.
+		if err := setMap[idx].WriteCSV(w); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
