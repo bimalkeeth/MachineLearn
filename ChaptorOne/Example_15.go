@@ -11,35 +11,36 @@ import (
 )
 
 func main() {
-
 	advertFile, err := os.Open("./CData/Advertising.csv")
-
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer advertFile.Close()
 	advDF := dataframe.ReadCSV(advertFile)
-	advertSummery := advDF.Describe()
-	fmt.Println(advertSummery)
+	yVals := advDF.Col("Sales").Float()
+	fmt.Println(yVals)
 
 	for _, colName := range advDF.Names() {
-		plotVals := make(plotter.Values, advDF.Nrow())
+		pts := make(plotter.XYs, advDF.Nrow())
 		for i, floatVal := range advDF.Col(colName).Float() {
-			plotVals[i] = floatVal
+			pts[i].X = floatVal
+			pts[i].Y = yVals[i]
 
 		}
 		p, err := plot.New()
 		if err != nil {
 			log.Fatal(err)
 		}
-		p.Title.Text = fmt.Sprintf("Histogram of a %s", colName)
-		h, err := plotter.NewHist(plotVals, 16)
+		p.X.Label.Text = colName
+		p.Y.Label.Text = "Y"
+		p.Add(plotter.NewGrid())
+		s, err := plotter.NewScatter(pts)
 		if err != nil {
 			log.Fatal(err)
 		}
-		h.Normalize(1)
-		p.Add(h)
-		if err := p.Save(4*vg.Inch, 4*vg.Inch, colName+"_hist.png"); err != nil {
+		s.GlyphStyle.Radius = vg.Points(3)
+		p.Add(s)
+		if err := p.Save(4*vg.Inch, 4*vg.Inch, colName+"_scatter.png"); err != nil {
 			log.Fatal(err)
 		}
 	}
